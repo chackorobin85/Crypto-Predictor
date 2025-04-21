@@ -7,6 +7,12 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
+	  @media (max-width: 600px) {
+  .container {
+    width: 90%;
+    padding: 15px;
+  }
+}
     body {
       font-family: 'Inter', sans-serif;
       background-color: #0e1117;
@@ -71,18 +77,44 @@
 <body>
   <div class="container">
     <h2 style="text-align: center;">🔮 Crypto Price Predictor</h2>
+	  <select id="symbolDropdown" onchange="syncSymbolInput()">
+  <option value="BTC">Bitcoin (BTC)</option>
+  <option value="ETH">Ethereum (ETH)</option>
+  <option value="SOL">Solana (SOL)</option>
+  <option value="ADA">Cardano (ADA)</option>
+</select>
     <input type="text" id="symbol" placeholder="e.g. bitcoin" />
     <input type="number" id="days" placeholder="Days ahead (e.g. 3)" />
     <button onclick="predict()">Predict</button>
     <div id="result"></div>
     <canvas id="priceChart" height="100"></canvas>
   </div>
-
+<script>
+  const coinMap = {
+    BTC: "bitcoin", ETH: "ethereum", SOL: "solana", ADA: "cardano",
+    XRP: "ripple", DOGE: "dogecoin", DOT: "polkadot", AVAX: "avalanche-2",
+    SHIB: "shiba-inu", MATIC: "polygon", LTC: "litecoin", TRX: "tron",
+    LINK: "chainlink", BCH: "bitcoin-cash", XLM: "stellar", NEAR: "near",
+    ATOM: "cosmos", ALGO: "algorand", ETC: "ethereum-classic", FTM: "fantom"
+  };
   <script>
+	  function syncSymbolInput() {
+  const dropdown = document.getElementById("symbolDropdown");
+  document.getElementById("symbol").value = dropdown.value;
+	  
+	  let dark = true;
+function toggleTheme() {
+  dark = !dark;
+  document.body.style.backgroundColor = dark ? "#0e1117" : "#f0f0f0";
+  document.body.style.color = dark ? "#ffffff" : "#000000";
+}
+}
     let chart; // chart instance
 
-    async function predict() {
-      const symbol = document.getElementById("symbol").value.trim();
+    async function predict() <button onclick="toggleTheme()">🌓 Switch Theme</button> {
+		
+      let symbol = document.getElementById("symbol").value.trim().toUpperCase();
+let coinId = coinMap[symbol] || symbol.toLowerCase();
       const daysAhead = parseInt(document.getElementById("days").value);
       const resultBox = document.getElementById("result");
 
@@ -140,7 +172,9 @@
           }
         });
 
-      } else {
+      } else
+	  
+	  <div id="loader" style="display: none; text-align: center; margin-top: 10px;">🔄 Predicting...</div>{
         resultBox.innerHTML = `<span style="color:red;">Error: ${data.error}</span>`;
       }
     }
