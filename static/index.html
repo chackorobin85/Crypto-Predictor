@@ -52,7 +52,7 @@
       const days = document.getElementById("days").value;
       const resultBox = document.getElementById("result");
 
-      const res = await fetch("http://localhost:8001/predict_price", {
+     const res = await fetch("https://crypto-predictor-02.onrender.com/predict_price", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ symbol, days_ahead: parseInt(days) })
