@@ -93,8 +93,8 @@ def predict_linear_price(request: PredictionRequest):
     url = f"https://api.coingecko.com/api/v3/coins/{request.symbol.lower()}/market_chart"
     params = {
         "vs_currency": "usd",
-        "days": 30,
-        "interval": "daily"
+        "days": 7,
+        "interval": "hourly"
     }
 
     response = httpx.get(url, params=params)
@@ -104,6 +104,7 @@ def predict_linear_price(request: PredictionRequest):
         return {"error": "Could not fetch price history."}
 
     prices = [price[1] for price in data["prices"]]
+    prices = prices[-30:]
 
     # Build training data
     X = np.arange(len(prices)).reshape(-1, 1)         # Days: 0, 1, 2, ..., n
