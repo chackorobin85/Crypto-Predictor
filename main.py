@@ -10,9 +10,11 @@ class MARequest(BaseModel):
     symbol: str
     days: int
 
+from fastapi.responses import FileResponse
+
 @app.get("/")
-def read_root():
-    return {"message": "Welcome to the Crypto Oracle."}
+def serve_homepage():
+    return FileResponse("static/index.html")
 
 @app.post("/ma")
 def moving_average(request: MARequest):
