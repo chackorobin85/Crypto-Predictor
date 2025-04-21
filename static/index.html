@@ -1,95 +1,149 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Crypto Price Predictor</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
-  body {
-    font-family: 'Segoe UI', sans-serif;
-    max-width: 500px;
-    margin: 50px auto;
-    padding: 20px;
-    background-color: #f4f4f4;
-    border-radius: 10px;
-    box-shadow: 0 0 20px rgba(0,0,0,0.1);
-  }
-  h2 {
-    text-align: center;
-  }
-  input, button {
-    width: 100%;
-    margin-top: 10px;
-    padding: 12px;
-    font-size: 16px;
-    border: 1px solid #ddd;
-    border-radius: 5px;
-  }
-  button {
-    background-color: #4caf50;
-    color: white;
-    cursor: pointer;
-  }
-  #result {
-    margin-top: 20px;
-    background: white;
-    padding: 15px;
-    border-radius: 5px;
-    border: 1px solid #ccc;
-  }
-</style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #0e1117;
+      color: #ffffff;
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .container {
+      max-width: 600px;
+      width: 100%;
+      background-color: #1e222b;
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.4);
+    }
+
+    input, button {
+      width: 100%;
+      margin-top: 12px;
+      padding: 14px;
+      font-size: 16px;
+      border: none;
+      border-radius: 6px;
+    }
+
+    input {
+      background-color: #2b2f3a;
+      color: #fff;
+    }
+
+    button {
+      background-color: #4caf50;
+      color: white;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background-color 0.2s ease-in-out;
+    }
+
+    button:hover {
+      background-color: #45a049;
+    }
+
+    canvas {
+      margin-top: 25px;
+      background-color: #ffffff;
+      border-radius: 8px;
+    }
+
+    #result {
+      margin-top: 20px;
+      font-size: 16px;
+      background-color: #2b2f3a;
+      padding: 15px;
+      border-radius: 8px;
+    }
+  </style>
 </head>
 <body>
-  <h2>Crypto Price Predictor</h2>
-
-  <input type="text" id="symbol" placeholder="e.g. bitcoin">
-  <input type="number" id="days" placeholder="Days ahead">
-  <button onclick="predict()">Predict</button>
-
-  <div id="result"></div>
+  <div class="container">
+    <h2 style="text-align: center;">🔮 Crypto Price Predictor</h2>
+    <input type="text" id="symbol" placeholder="e.g. bitcoin" />
+    <input type="number" id="days" placeholder="Days ahead (e.g. 3)" />
+    <button onclick="predict()">Predict</button>
+    <div id="result"></div>
+    <canvas id="priceChart" height="100"></canvas>
+  </div>
 
   <script>
+    let chart; // chart instance
+
     async function predict() {
-      const symbol = document.getElementById("symbol").value;
-      const days = document.getElementById("days").value;
+      const symbol = document.getElementById("symbol").value.trim();
+      const daysAhead = parseInt(document.getElementById("days").value);
       const resultBox = document.getElementById("result");
 
-     const res = await fetch("https://crypto-predictor-02.onrender.com/predict_price", {
+      const response = await fetch("https://crypto-predictor-02.onrender.com/predict_linear", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ symbol, days_ahead: parseInt(days) })
+        body: JSON.stringify({ symbol, days_ahead: daysAhead })
       });
 
-      const data = await res.json();
-		// After you get 'data' from the API...
-const chartCanvas = document.getElementById("priceChart");
-const chartData = {
-  labels: [...Array(30 + parseInt(days)).keys()].map(i => `Day ${i + 1}`),
-  datasets: [{
-    label: `${data.symbol} Price`,
-    data: [...Array(30).fill(data.moving_average_usd), data.predicted_price_usd],
-    borderColor: "blue",
-    fill: false
-  }]
-};
-
-new Chart(chartCanvas, {
-  type: "line",
-  data: chartData,
-  options: { responsive: true }
-});
+      const data = await response.json();
 
       if (data.predicted_price_usd) {
         resultBox.innerHTML = `
-          <strong>${data.symbol}</strong><br>
-          Days Ahead: ${data.days_ahead}<br>
-          Predicted Price: $${data.predicted_price_usd}<br>
+          <strong>${data.symbol}</strong><br/>
+          Days Ahead: ${data.days_ahead}<br/>
+          Predicted Price: <strong>$${data.predicted_price_usd}</strong><br/>
           <em>${data.note}</em>
         `;
+
+        // Fetch price history for chart
+        const chartRes = await fetch(`https://api.coingecko.com/api/v3/coins/${symbol.toLowerCase()}/market_chart?vs_currency=usd&days=7&interval=hourly`);
+        const chartData = await chartRes.json();
+
+        const prices = chartData.prices.map(entry => entry[1]).slice(-30);
+        const labels = Array.from({length: prices.length}, (_, i) => `T-${prices.length - i}`);
+
+        prices.push(data.predicted_price_usd);
+        labels.push(`+${data.days_ahead}d`);
+
+        // Destroy old chart if exists
+        if (chart) chart.destroy();
+
+        chart = new Chart(document.getElementById("priceChart"), {
+          type: "line",
+          data: {
+            labels: labels,
+            datasets: [{
+              label: `${symbol.toUpperCase()} Price`,
+              data: prices,
+              fill: false,
+              borderColor: "#4caf50",
+              backgroundColor: "#4caf50",
+              tension: 0.2
+            }]
+          },
+          options: {
+            responsive: true,
+            plugins: {
+              legend: { display: true }
+            },
+            scales: {
+              x: { ticks: { color: "#bbb" }},
+              y: { ticks: { color: "#bbb" }}
+            }
+          }
+        });
+
       } else {
         resultBox.innerHTML = `<span style="color:red;">Error: ${data.error}</span>`;
       }
     }
   </script>
-	<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<canvas id="priceChart" width="400" height="200"></canvas>
 </body>
 </html>
