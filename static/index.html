@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Crypto Price Predictor</title>
+  <style>
+  body {
+    font-family: 'Segoe UI', sans-serif;
+    max-width: 500px;
+    margin: 50px auto;
+    padding: 20px;
+    background-color: #f4f4f4;
+    border-radius: 10px;
+    box-shadow: 0 0 20px rgba(0,0,0,0.1);
+  }
+  h2 {
+    text-align: center;
+  }
+  input, button {
+    width: 100%;
+    margin-top: 10px;
+    padding: 12px;
+    font-size: 16px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+  }
+  button {
+    background-color: #4caf50;
+    color: white;
+    cursor: pointer;
+  }
+  #result {
+    margin-top: 20px;
+    background: white;
+    padding: 15px;
+    border-radius: 5px;
+    border: 1px solid #ccc;
+  }
+</style>
+</head>
+<body>
+  <h2>Crypto Price Predictor</h2>
+
+  <input type="text" id="symbol" placeholder="e.g. bitcoin">
+  <input type="number" id="days" placeholder="Days ahead">
+  <button onclick="predict()">Predict</button>
+
+  <div id="result"></div>
+
+  <script>
+    async function predict() {
+      const symbol = document.getElementById("symbol").value;
+      const days = document.getElementById("days").value;
+      const resultBox = document.getElementById("result");
+
+      const res = await fetch("http://localhost:8001/predict_price", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ symbol, days_ahead: parseInt(days) })
+      });
+
+      const data = await res.json();
+		// After you get 'data' from the API...
+const chartCanvas = document.getElementById("priceChart");
+const chartData = {
+  labels: [...Array(30 + parseInt(days)).keys()].map(i => `Day ${i + 1}`),
+  datasets: [{
+    label: `${data.symbol} Price`,
+    data: [...Array(30).fill(data.moving_average_usd), data.predicted_price_usd],
+    borderColor: "blue",
+    fill: false
+  }]
+};
+
+new Chart(chartCanvas, {
+  type: "line",
+  data: chartData,
+  options: { responsive: true }
+});
+
+      if (data.predicted_price_usd) {
+        resultBox.innerHTML = `
+          <strong>${data.symbol}</strong><br>
+          Days Ahead: ${data.days_ahead}<br>
+          Predicted Price: $${data.predicted_price_usd}<br>
+          <em>${data.note}</em>
+        `;
+      } else {
+        resultBox.innerHTML = `<span style="color:red;">Error: ${data.error}</span>`;
+      }
+    }
+  </script>
+	<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<canvas id="priceChart" width="400" height="200"></canvas>
+</body>
+</html>
