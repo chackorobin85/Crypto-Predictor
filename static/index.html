@@ -110,102 +110,100 @@
       document.getElementById("symbol").value = dropdown.value;
     }
 
-    async function predict() {
-      const loader = document.getElementById("loader");
-      const resultBox = document.getElementById("result");
-      const statsBox = document.getElementById("stats");
-      const symbolInput = document.getElementById("symbol").value.trim().toLowerCase();
-      const targetDate = document.getElementById("targetDate").value;
+     async function predict() {
+    const loader = document.getElementById("loader");
+    const resultBox = document.getElementById("result");
+    const statsBox = document.getElementById("stats");
+    const symbolInput = document.getElementById("symbol").value.trim().toLowerCase();
+    const targetDate = document.getElementById("targetDate").value;
 
-      loader.style.display = "block";
-      resultBox.innerHTML = '';
-      statsBox.innerHTML = '';
+    loader.style.display = "block";
+    resultBox.innerHTML = '';
+    statsBox.innerHTML = '';
 
-      if (!symbolInput || !targetDate) {
-        loader.style.display = "none";
-        resultBox.innerHTML = `<span style="color:red;">Please enter symbol and select a date.</span>`;
+    if (!symbolInput || !targetDate) {
+      loader.style.display = "none";
+      resultBox.innerHTML = `<span style="color:red;">Please enter symbol and select a date.</span>`;
+      return;
+    }
+
+    let coinIdMatch = fullCoinList.find(c => c.symbol.toLowerCase() === symbolInput);
+    let coinId = coinIdMatch ? coinIdMatch.id : symbolInput;
+
+    try {
+      const res = await fetch("https://crypto-predictor-02.onrender.com/predict_linear", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ symbol: coinId, target_date: targetDate })
+      });
+
+      const data = await res.json();
+      console.log("🔍 Predict response:", data); // <— Logging added
+      loader.style.display = "none";
+
+      if (data.predicted_price_usd) {
+        resultBox.innerHTML = `
+          <strong>${data.symbol}</strong><br/>
+          Target Date: ${data.target_date}<br/>
+          Predicted Price: <strong>$${data.predicted_price_usd}</strong><br/>
+          <em>${data.note}</em>
+        `;
+      } else {
+        resultBox.innerHTML = `<span style="color:red;">Error: ${data.error || 'Unexpected response from server.'}</span>`;
         return;
       }
 
-      // Get matching full ID from CoinGecko
-      let coinIdMatch = fullCoinList.find(c => c.symbol.toLowerCase() === symbolInput);
-      let coinId = coinIdMatch ? coinIdMatch.id : symbolInput;
+      const statsRes = await fetch(`https://crypto-predictor-02.onrender.com/coin_stats/${coinId}`);
+      const stats = await statsRes.json();
+      statsBox.innerHTML = `
+        <strong>📈 Stats for ${stats.symbol}</strong><br/>
+        Current Price: $${stats.current_price_usd}<br/>
+        52W High: $${stats.high_52w}<br/>
+        52W Low: $${stats.low_52w}<br/>
+        All-Time High: $${stats.high_24h}<br/>
+        All-Time Low: $${stats.low_24h}<br/>
+        1Y Change: ${stats.price_change_percentage_1y?.toFixed(2) ?? 'N/A'}%
+      `;
 
-      try {
-        const res = await fetch("https://crypto-predictor-02.onrender.com/predict_linear", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ symbol: coinId, target_date: targetDate })
-        });
+      const historyRes = await fetch(`https://crypto-predictor-02.onrender.com/historical_prices/${coinId}/30`);
+      const historyData = await historyRes.json();
+      const prices = historyData.prices.map(p => p[1]);
+      const labels = historyData.prices.map(p => {
+        const date = new Date(p[0]);
+        return `${date.getMonth() + 1}/${date.getDate()}`;
+      });
 
-        const data = await res.json();
-        loader.style.display = "none";
-
-        if (data.predicted_price_usd) {
-          resultBox.innerHTML = `
-            <strong>${data.symbol}</strong><br/>
-            Target Date: ${data.target_date}<br/>
-            Predicted Price: <strong>$${data.predicted_price_usd}</strong><br/>
-            <em>${data.note}</em>
-          `;
-        } else {
-          resultBox.innerHTML = `<span style="color:red;">Error: ${data.error}</span>`;
-          return;
-        }
-
-        // Fetch stats
-        const statsRes = await fetch(`https://crypto-predictor-02.onrender.com/coin_stats/${coinId}`);
-        const stats = await statsRes.json();
-        statsBox.innerHTML = `
-          <strong>📈 Stats for ${stats.symbol}</strong><br/>
-          Current Price: $${stats.current_price_usd}<br/>
-          52W High: $${stats.high_52w}<br/>
-          52W Low: $${stats.low_52w}<br/>
-          All-Time High: $${stats.high_24h}<br/>
-          All-Time Low: $${stats.low_24h}<br/>
-          1Y Change: ${stats.price_change_percentage_1y?.toFixed(2) ?? 'N/A'}%
-        `;
-
-        // Fetch historical chart
-        const historyRes = await fetch(`https://crypto-predictor-02.onrender.com/historical_prices/${coinId}/30`);
-        const historyData = await historyRes.json();
-        const prices = historyData.prices.map(p => p[1]);
-        const labels = historyData.prices.map(p => {
-          const date = new Date(p[0]);
-          return `${date.getMonth() + 1}/${date.getDate()}`;
-        });
-
-        if (chart) chart.destroy();
-        chart = new Chart(document.getElementById("priceChart"), {
-          type: "line",
-          data: {
-            labels: labels,
-            datasets: [{
-              label: `${stats.symbol} Price (Past 30 Days)`,
-              data: prices,
-              fill: false,
-              borderColor: "#4caf50",
-              tension: 0.2
-            }]
+      if (chart) chart.destroy();
+      chart = new Chart(document.getElementById("priceChart"), {
+        type: "line",
+        data: {
+          labels: labels,
+          datasets: [{
+            label: `${stats.symbol} Price (Past 30 Days)`,
+            data: prices,
+            fill: false,
+            borderColor: "#4caf50",
+            tension: 0.2
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { display: true }
           },
-          options: {
-            responsive: true,
-            plugins: {
-              legend: { display: true }
-            },
-            scales: {
-              x: { ticks: { color: "#bbb" }},
-              y: { ticks: { color: "#bbb" }}
-            }
+          scales: {
+            x: { ticks: { color: "#bbb" }},
+            y: { ticks: { color: "#bbb" }}
           }
-        });
+        }
+      });
 
-      } catch (err) {
-        console.error(err);
-        loader.style.display = "none";
-        resultBox.innerHTML = `<span style="color:red;">Something went wrong. Check logs.</span>`;
-      }
+    } catch (err) {
+      console.error("🔥 JS Exception:", err);
+      loader.style.display = "none";
+      resultBox.innerHTML = `<span style="color:red;">Something went wrong. Check console logs for details.</span>`;
     }
+  }
 
     window.onload = async () => {
       await loadTopCoins();
