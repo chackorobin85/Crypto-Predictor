@@ -154,7 +154,7 @@
       `;
 
       // 🔍 Coin Stats
-      const statsRes = await fetch(`https://crypto-predictor-02.onrender.com/coin_stats/${coinId}`);
+      const statsRes = await fetch(`https://crypto predictor.onrender.com/coin_stats/${coinId}`);
       const stats = await statsRes.json();
       console.log("📊 Stats response:", stats);
 
@@ -174,7 +174,7 @@
       `;
 
       // 🔍 Chart
-      const historyRes = await fetch(`https://crypto-predictor-02.onrender.com/historical_prices/${coinId}/30`);
+      const historyRes = await fetch(`https://crypto predictor.onrender.com/historical_prices/${coinId}/30`);
       const historyData = await historyRes.json();
 
       const prices = historyData?.prices?.map(p => p[1]) ?? [];
