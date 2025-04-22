@@ -64,3 +64,35 @@ def predict_linear_price(request: PredictionRequest):
     except Exception as e:
         print("🔥 Exception:", str(e))
         return {"error": "Internal server error. Please try again."}
+    @app.get("/coin_stats/{symbol}")
+def coin_stats(symbol: str):
+    try:
+        url = f"https://api.coingecko.com/api/v3/coins/{symbol.lower()}"
+        params = {
+            "localization": "false",
+            "tickers": "false",
+            "market_data": "true"
+        }
+
+        response = httpx.get(url, params=params)
+        if response.status_code != 200:
+            return {"error": f"CoinGecko returned status code {response.status_code}"}
+
+        data = response.json()
+        market = data.get("market_data")
+        if not market:
+            return {"error": "No market data found."}
+
+        return {
+            "symbol": symbol.upper(),
+            "current_price_usd": market.get("current_price", {}).get("usd"),
+            "high_52w": market.get("ath", {}).get("usd"),
+            "low_52w": market.get("atl", {}).get("usd"),
+            "high_24h": market.get("high_24h", {}).get("usd"),
+            "low_24h": market.get("low_24h", {}).get("usd"),
+            "price_change_percentage_1y": market.get("price_change_percentage_1y_in_currency", {}).get("usd")
+        }
+
+    except Exception as e:
+        print("🔥 Coin stats exception:", str(e))
+        return {"error": "Server error while retrieving stats."}
