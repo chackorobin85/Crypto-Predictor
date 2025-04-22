@@ -206,14 +206,17 @@
         } else {
           resultBox.innerHTML = `<span style="color:red;">Error: ${data.error}</span>`;
         }
-      } catch (error) {
+      } catch (error)
+	  console.error("Predict error:", error);{
         loader.style.display = "none";
         resultBox.innerHTML = `<span style="color:red;">Something went wrong. Check your internet or server.</span>`;
       }
     }
 
     // Load coin list when the page loads
-    window.onload = loadCoinList;
+    window.onload = async () => {
+  await loadCoinList();
+};
   </script>
 </body>
 </html>
