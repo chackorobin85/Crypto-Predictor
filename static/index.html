@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Crypto Price Predictor</title>
+  <title>Crypto Dashboard</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
@@ -19,7 +19,7 @@
     }
 
     .container {
-      max-width: 600px;
+      max-width: 700px;
       width: 100%;
       background-color: #1e222b;
       padding: 30px;
@@ -46,7 +46,6 @@
       color: white;
       font-weight: 600;
       cursor: pointer;
-      transition: background-color 0.2s ease-in-out;
     }
 
     button:hover {
@@ -59,12 +58,16 @@
       border-radius: 8px;
     }
 
-    #result {
+    #stats {
       margin-top: 20px;
-      font-size: 16px;
       background-color: #2b2f3a;
       padding: 15px;
       border-radius: 8px;
+      font-size: 14px;
+    }
+
+    #result {
+      margin-top: 10px;
     }
 
     #loader {
@@ -72,45 +75,34 @@
       text-align: center;
       margin-top: 10px;
     }
-
-    @media (max-width: 600px) {
-      .container {
-        width: 90%;
-        padding: 15px;
-      }
-    }
   </style>
 </head>
 <body>
   <div class="container">
-    <h2 style="text-align: center;">🔮 Crypto Price Predictor</h2>
+    <h2 style="text-align: center;">📊 Crypto Price Dashboard</h2>
 
-    <select id="symbolDropdown" onchange="syncSymbolInput()">
-      <option value="BTC">Bitcoin (BTC)</option>
-      <option value="ETH">Ethereum (ETH)</option>
-      <option value="SOL">Solana (SOL)</option>
-      <option value="ADA">Cardano (ADA)</option>
-    </select>
-
-    <input type="text" id="symbol" placeholder="e.g. bitcoin or BTC" />
-    <input type="number" id="days" placeholder="Days ahead (e.g. 3)" />
-    <button onclick="predict()">Predict</button>
-    <button onclick="toggleTheme()">🌓 Switch Theme</button>
+    <select id="symbolDropdown" onchange="syncSymbolInput()"></select>
+    <input type="text" id="symbol" placeholder="Type or pick symbol (e.g. BTC)" />
+    <input type="date" id="targetDate" />
+    <button onclick="predict()">🔮 Predict</button>
 
     <div id="loader">🔄 Predicting...</div>
     <div id="result"></div>
+    <div id="stats"></div>
     <canvas id="priceChart" height="100"></canvas>
   </div>
 
   <script>
-    let dark = true;
     let chart;
     let fullCoinList = [];
 
-    function toggleTheme() {
-      dark = !dark;
-      document.body.style.backgroundColor = dark ? "#0e1117" : "#f0f0f0";
-      document.body.style.color = dark ? "#ffffff" : "#000000";
+    async function loadTopCoins() {
+      const res = await fetch("https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=50&page=1");
+      const topCoins = await res.json();
+
+      const dropdown = document.getElementById("symbolDropdown");
+      dropdown.innerHTML = topCoins.map(c => `<option value="${c.symbol.toUpperCase()}">${c.name} (${c.symbol.toUpperCase()})</option>`).join('');
+      fullCoinList = topCoins;
     }
 
     function syncSymbolInput() {
@@ -118,100 +110,105 @@
       document.getElementById("symbol").value = dropdown.value;
     }
 
-    async function loadCoinList() {
-      const res = await fetch("https://api.coingecko.com/api/v3/coins/list");
-      fullCoinList = await res.json();
-    }
-
     async function predict() {
       const loader = document.getElementById("loader");
-      loader.style.display = "block";
       const resultBox = document.getElementById("result");
-      resultBox.innerHTML = "";
+      const statsBox = document.getElementById("stats");
+      const symbolInput = document.getElementById("symbol").value.trim().toLowerCase();
+      const targetDate = document.getElementById("targetDate").value;
+
+      loader.style.display = "block";
+      resultBox.innerHTML = '';
+      statsBox.innerHTML = '';
+
+      if (!symbolInput || !targetDate) {
+        loader.style.display = "none";
+        resultBox.innerHTML = `<span style="color:red;">Please enter symbol and select a date.</span>`;
+        return;
+      }
+
+      // Get matching full ID from CoinGecko
+      let coinIdMatch = fullCoinList.find(c => c.symbol.toLowerCase() === symbolInput);
+      let coinId = coinIdMatch ? coinIdMatch.id : symbolInput;
 
       try {
-        let symbolInput = document.getElementById("symbol").value.trim().toLowerCase();
-        let match = fullCoinList.find(coin =>
-          coin.symbol.toLowerCase() === symbolInput || coin.id.toLowerCase() === symbolInput
-        );
-
-        if (!match) {
-          resultBox.innerHTML = `<span style="color:red;">⚠️ Unknown coin symbol. Try BTC, ETH, etc.</span>`;
-          loader.style.display = "none";
-          return;
-        }
-
-        let coinId = match.id;
-        const daysAhead = parseInt(document.getElementById("days").value);
-
-        const response = await fetch("https://crypto-predictor-02.onrender.com/predict_linear", {
+        const res = await fetch("https://crypto-predictor-02.onrender.com/predict_linear", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ symbol: coinId, days_ahead: daysAhead })
+          body: JSON.stringify({ symbol: coinId, target_date: targetDate })
         });
 
-        const data = await response.json();
+        const data = await res.json();
         loader.style.display = "none";
 
         if (data.predicted_price_usd) {
           resultBox.innerHTML = `
             <strong>${data.symbol}</strong><br/>
-            Days Ahead: ${data.days_ahead}<br/>
+            Target Date: ${data.target_date}<br/>
             Predicted Price: <strong>$${data.predicted_price_usd}</strong><br/>
             <em>${data.note}</em>
           `;
-
-          const chartRes = await fetch(`https://api.coingecko.com/api/v3/coins/${coinId}/market_chart?vs_currency=usd&days=7`);
-          const chartData = await chartRes.json();
-
-          if (!chartData.prices || chartData.prices.length === 0) {
-            resultBox.innerHTML += `<br><span style="color:red;">⚠️ No chart data found.</span>`;
-            return;
-          }
-
-          const prices = chartData.prices.map(entry => entry[1]).slice(-30);
-          const labels = Array.from({ length: prices.length }, (_, i) => `T-${prices.length - i}`);
-          prices.push(data.predicted_price_usd);
-          labels.push(`+${data.days_ahead}d`);
-
-          if (chart) chart.destroy();
-
-          chart = new Chart(document.getElementById("priceChart"), {
-            type: "line",
-            data: {
-              labels: labels,
-              datasets: [{
-                label: `${match.symbol.toUpperCase()} Price`,
-                data: prices,
-                fill: false,
-                borderColor: "#4caf50",
-                backgroundColor: "#4caf50",
-                tension: 0.2
-              }]
-            },
-            options: {
-              responsive: true,
-              plugins: {
-                legend: { display: true }
-              },
-              scales: {
-                x: { ticks: { color: "#bbb" }},
-                y: { ticks: { color: "#bbb" }}
-              }
-            }
-          });
         } else {
           resultBox.innerHTML = `<span style="color:red;">Error: ${data.error}</span>`;
+          return;
         }
-      } catch (error) {
-        console.error("Predict error:", error);
+
+        // Fetch stats
+        const statsRes = await fetch(`https://crypto-predictor-02.onrender.com/coin_stats/${coinId}`);
+        const stats = await statsRes.json();
+        statsBox.innerHTML = `
+          <strong>📈 Stats for ${stats.symbol}</strong><br/>
+          Current Price: $${stats.current_price_usd}<br/>
+          52W High: $${stats.high_52w}<br/>
+          52W Low: $${stats.low_52w}<br/>
+          All-Time High: $${stats.high_24h}<br/>
+          All-Time Low: $${stats.low_24h}<br/>
+          1Y Change: ${stats.price_change_percentage_1y?.toFixed(2) ?? 'N/A'}%
+        `;
+
+        // Fetch historical chart
+        const historyRes = await fetch(`https://crypto-predictor-02.onrender.com/historical_prices/${coinId}/30`);
+        const historyData = await historyRes.json();
+        const prices = historyData.prices.map(p => p[1]);
+        const labels = historyData.prices.map(p => {
+          const date = new Date(p[0]);
+          return `${date.getMonth() + 1}/${date.getDate()}`;
+        });
+
+        if (chart) chart.destroy();
+        chart = new Chart(document.getElementById("priceChart"), {
+          type: "line",
+          data: {
+            labels: labels,
+            datasets: [{
+              label: `${stats.symbol} Price (Past 30 Days)`,
+              data: prices,
+              fill: false,
+              borderColor: "#4caf50",
+              tension: 0.2
+            }]
+          },
+          options: {
+            responsive: true,
+            plugins: {
+              legend: { display: true }
+            },
+            scales: {
+              x: { ticks: { color: "#bbb" }},
+              y: { ticks: { color: "#bbb" }}
+            }
+          }
+        });
+
+      } catch (err) {
+        console.error(err);
         loader.style.display = "none";
-        resultBox.innerHTML = `<span style="color:red;">Something went wrong. Check your internet or server.</span>`;
+        resultBox.innerHTML = `<span style="color:red;">Something went wrong. Check logs.</span>`;
       }
     }
 
     window.onload = async () => {
-      await loadCoinList();
+      await loadTopCoins();
     };
   </script>
 </body>
