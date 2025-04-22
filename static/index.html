@@ -158,7 +158,7 @@
           // Chart
           let chartData;
           try {
-            const chartRes = await fetch(`https://api.coingecko.com/api/v3/coins/${coinId}/market_chart?vs_currency=usd&days=7&interval=hourly`);
+            const chartRes = await fetch(`https://api.coingecko.com/api/v3/coins/${coinId}/market_chart?vs_currency=usd&days=7`);
             chartData = await chartRes.json();
 
             if (!chartData.prices || chartData.prices.length === 0) {
