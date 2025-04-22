@@ -103,37 +103,38 @@
   </div>
 
   <script>
-    const coinMap = {
-      BTC: "bitcoin", ETH: "ethereum", SOL: "solana", ADA: "cardano",
-      XRP: "ripple", DOGE: "dogecoin", DOT: "polkadot", AVAX: "avalanche-2",
-      SHIB: "shiba-inu", MATIC: "polygon", LTC: "litecoin", TRX: "tron",
-      LINK: "chainlink", BCH: "bitcoin-cash", XLM: "stellar", NEAR: "near",
-      ATOM: "cosmos", ALGO: "algorand", ETC: "ethereum-classic", FTM: "fantom"
-    };
-
-    function syncSymbolInput() {
-      const dropdown = document.getElementById("symbolDropdown");
-      document.getElementById("symbol").value = dropdown.value;
-    }
-
     let dark = true;
+    let chart;
+    let fullCoinList = [];
+
     function toggleTheme() {
       dark = !dark;
       document.body.style.backgroundColor = dark ? "#0e1117" : "#f0f0f0";
       document.body.style.color = dark ? "#ffffff" : "#000000";
     }
 
-    let chart;
+    function syncSymbolInput() {
+      const dropdown = document.getElementById("symbolDropdown");
+      document.getElementById("symbol").value = dropdown.value;
+    }
+
+    async function loadCoinList() {
+      const res = await fetch("https://api.coingecko.com/api/v3/coins/list");
+      fullCoinList = await res.json();
+    }
 
     async function predict() {
       const loader = document.getElementById("loader");
       loader.style.display = "block";
-
       const resultBox = document.getElementById("result");
       resultBox.innerHTML = "";
 
-      let symbolInput = document.getElementById("symbol").value.trim().toUpperCase();
-      let coinId = coinMap[symbolInput] || symbolInput.toLowerCase();
+      let symbolInput = document.getElementById("symbol").value.trim().toLowerCase();
+      let match = fullCoinList.find(coin =>
+        coin.symbol.toLowerCase() === symbolInput || coin.id.toLowerCase() === symbolInput
+      );
+      let coinId = match ? match.id : symbolInput;
+
       const daysAhead = parseInt(document.getElementById("days").value);
 
       try {
@@ -154,22 +155,22 @@
             <em>${data.note}</em>
           `;
 
-          // Fetch chart data
-let chartData;
-try {
-  const chartRes = await fetch(`https://api.coingecko.com/api/v3/coins/${coinId}/market_chart?vs_currency=usd&days=7&interval=hourly`);
-  chartData = await chartRes.json();
+          // Chart
+          let chartData;
+          try {
+            const chartRes = await fetch(`https://api.coingecko.com/api/v3/coins/${coinId}/market_chart?vs_currency=usd&days=7&interval=hourly`);
+            chartData = await chartRes.json();
 
-  if (!chartData.prices || chartData.prices.length === 0) {
-    throw new Error("No chart data found");
-  }
-} catch (err) {
-  console.error("Chart fetch error:", err);
-  resultBox.innerHTML += `<br><span style="color:red;">⚠️ Could not fetch price history for chart.</span>`;
-  return;
-}
+            if (!chartData.prices || chartData.prices.length === 0) {
+              throw new Error("No chart data found");
+            }
+          } catch (err) {
+            console.error("Chart fetch error:", err);
+            resultBox.innerHTML += `<br><span style="color:red;">⚠️ Could not fetch price history for chart.</span>`;
+            return;
+          }
 
-const prices = chartData.prices.map(entry => entry[1]).slice(-30);
+          const prices = chartData.prices.map(entry => entry[1]).slice(-30);
           const labels = Array.from({ length: prices.length }, (_, i) => `T-${prices.length - i}`);
 
           prices.push(data.predicted_price_usd);
@@ -182,7 +183,7 @@ const prices = chartData.prices.map(entry => entry[1]).slice(-30);
             data: {
               labels: labels,
               datasets: [{
-                label: `${symbolInput} Price`,
+                label: `${match.symbol.toUpperCase()} Price`,
                 data: prices,
                 fill: false,
                 borderColor: "#4caf50",
@@ -210,6 +211,9 @@ const prices = chartData.prices.map(entry => entry[1]).slice(-30);
         resultBox.innerHTML = `<span style="color:red;">Something went wrong. Check your internet or server.</span>`;
       }
     }
+
+    // Load coin list when the page loads
+    window.onload = loadCoinList;
   </script>
 </body>
 </html>
