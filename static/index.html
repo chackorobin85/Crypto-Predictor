@@ -164,14 +164,16 @@
       }
 
       statsBox.innerHTML = `
-        <strong>📈 Stats for ${stats.symbol || 'N/A'}</strong><br/>
-        Current Price: $${stats.current_price_usd ?? 'N/A'}<br/>
-        52W High: $${stats.high_52w ?? 'N/A'}<br/>
-        52W Low: $${stats.low_52w ?? 'N/A'}<br/>
-        All-Time High: $${stats.high_24h ?? 'N/A'}<br/>
-        All-Time Low: $${stats.low_24h ?? 'N/A'}<br/>
-        1Y Change: ${stats.price_change_percentage_1y?.toFixed(2) ?? 'N/A'}%
-      `;
+  <strong>📈 Stats for ${stats.symbol || 'N/A'}</strong><br/>
+  Current Price: $${stats.current_price_usd?.toFixed(2) ?? 'N/A'}<br/>
+  24H High: $${stats.high_24h?.toFixed(2) ?? 'N/A'}<br/>
+  24H Low: $${stats.low_24h?.toFixed(2) ?? 'N/A'}<br/>
+  1H Change: ${stats.price_change_percentage_1h?.toFixed(2) ?? 'N/A'}%<br/>
+  24H Change: ${stats.price_change_percentage_24h?.toFixed(2) ?? 'N/A'}%<br/>
+  7D Change: ${stats.price_change_percentage_7d?.toFixed(2) ?? 'N/A'}%<br/>
+  Volume 24H: $${stats.volume_24h?.toLocaleString() ?? 'N/A'}<br/>
+  Market Cap: $${stats.market_cap?.toLocaleString() ?? 'N/A'}<br/>
+`;
 
       // 🔍 Chart
       const historyRes = await fetch(`https://crypto-predictor-02.onrender.com/historical_prices/${coinId}/30`);

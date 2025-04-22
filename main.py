@@ -5,6 +5,7 @@ from sklearn.linear_model import LinearRegression
 import numpy as np
 import httpx
 from datetime import datetime
+CMC_API_KEY = "49b3f548-348d-4c31-8faf-249b0084718a"
 
 app = FastAPI()
 
@@ -67,32 +68,31 @@ def predict_linear_price(request: PredictionRequest):
 @app.get("/coin_stats/{symbol}")
 def coin_stats(symbol: str):
     try:
-        url = f"https://api.coingecko.com/api/v3/coins/{symbol.lower()}"
-        params = {
-            "localization": "false",
-            "tickers": "false",
-            "market_data": "true"
-        }
+        url = "https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest"
+        headers = {"X-CMC_PRO_API_KEY": CMC_API_KEY}
+        params = {"symbol": symbol.upper(), "convert": "USD"}
 
-        response = httpx.get(url, params=params)
-        if response.status_code != 200:
-            return {"error": f"CoinGecko returned status code {response.status_code}"}
-
+        response = httpx.get(url, headers=headers, params=params)
         data = response.json()
-        market = data.get("market_data")
-        if not market:
-            return {"error": "No market data found."}
+
+        if "data" not in data or symbol.upper() not in data["data"]:
+            return {"error": "Invalid symbol or data not found."}
+
+        info = data["data"][symbol.upper()]
+        quote = info.get("quote", {}).get("USD", {})
 
         return {
             "symbol": symbol.upper(),
-            "current_price_usd": market.get("current_price", {}).get("usd"),
-            "high_52w": market.get("ath", {}).get("usd"),
-            "low_52w": market.get("atl", {}).get("usd"),
-            "high_24h": market.get("high_24h", {}).get("usd"),
-            "low_24h": market.get("low_24h", {}).get("usd"),
-            "price_change_percentage_1y": market.get("price_change_percentage_1y_in_currency", {}).get("usd")
+            "current_price_usd": quote.get("price"),
+            "high_24h": quote.get("high_24h"),
+            "low_24h": quote.get("low_24h"),
+            "price_change_percentage_1h": quote.get("percent_change_1h"),
+            "price_change_percentage_24h": quote.get("percent_change_24h"),
+            "price_change_percentage_7d": quote.get("percent_change_7d"),
+            "market_cap": quote.get("market_cap"),
+            "volume_24h": quote.get("volume_24h")
         }
 
     except Exception as e:
-        print("🔥 Coin stats exception:", str(e))
-        return {"error": "Server error while retrieving stats."}
+        print("🔥 CMC stats exception:", str(e))
+        return {"error": "Failed to fetch from CoinMarketCap"}
