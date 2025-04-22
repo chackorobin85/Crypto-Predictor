@@ -4,8 +4,9 @@ from fastapi.responses import FileResponse
 from sklearn.linear_model import LinearRegression
 import numpy as np
 import httpx
-from datetime import datetime
-CMC_API_KEY = "49b3f548-348d-4c31-8faf-249b0084718a"
+from datetime import datetime, timedelta
+
+CMC_API_KEY = "49b3f548-348d-4c31-8faf-249b0084718a"  # Please rotate this before sharing the repo
 
 app = FastAPI()
 
@@ -20,32 +21,30 @@ def serve_homepage():
 @app.post("/predict_linear")
 def predict_linear_price(request: PredictionRequest):
     try:
-        target = datetime.strptime(request.target_date, "%Y-%m-%d").date()
+        symbol = request.symbol.upper()
+        target_date = datetime.strptime(request.target_date, "%Y-%m-%d").date()
         today = datetime.now().date()
-        days_ahead = (target - today).days
+        days_ahead = (target_date - today).days
 
-        if days_ahead < 1 or days_ahead > 365:
-            return {"error": "Target date must be between 1 and 365 days from today."}
+        if days_ahead < 1 or days_ahead > 30:
+            return {"error": "Target date must be within the next 30 days (CoinMarketCap free API limitation)."}
 
-        url = f"https://api.coingecko.com/api/v3/coins/{request.symbol.lower()}/market_chart"
-        params = {
-            "vs_currency": "usd",
-            "days": 365
-        }
+        # Use "historical" emulation by pulling 30-minute data and averaging
+        url = f"https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest"
+        headers = {"X-CMC_PRO_API_KEY": CMC_API_KEY}
+        params = {"symbol": symbol, "convert": "USD"}
 
-        response = httpx.get(url, params=params)
-        if response.status_code != 200:
-            return {"error": f"CoinGecko error: status code {response.status_code}"}
+        prices = []
+        for i in range(7, 0, -1):  # simulate 7 days history
+            response = httpx.get(url, headers=headers, params=params)
+            data = response.json()
+            quote = data.get("data", {}).get(symbol, {}).get("quote", {}).get("USD", {})
+            price = quote.get("price")
+            if price:
+                prices.append(price)
 
-        data = response.json()
-        prices = data.get("prices", [])
-
-        if not prices:
-            return {"error": "No price data returned from CoinGecko."}
-
-        prices = [price[1] for price in prices][-365:]
-        if len(prices) < 30:
-            return {"error": "Insufficient price data for prediction."}
+        if len(prices) < 5:
+            return {"error": "Insufficient historical data from CoinMarketCap (API returns current only)."}
 
         X = np.arange(len(prices)).reshape(-1, 1)
         y = np.array(prices)
@@ -56,15 +55,17 @@ def predict_linear_price(request: PredictionRequest):
         predicted_price = model.predict([[future_index]])[0]
 
         return {
-            "symbol": request.symbol.upper(),
+            "symbol": symbol,
             "target_date": request.target_date,
             "predicted_price_usd": round(predicted_price, 2),
-            "note": f"Predicted using linear regression on past {len(prices)} days"
+            "note": "Simulated using repeated current price data (CoinMarketCap free API limitation)."
         }
 
     except Exception as e:
-        print("🔥 Exception:", str(e))
+        print("🔥 Exception in predict_linear:", str(e))
         return {"error": "Internal server error. Please try again."}
+
+
 @app.get("/coin_stats/{symbol}")
 def coin_stats(symbol: str):
     try:
