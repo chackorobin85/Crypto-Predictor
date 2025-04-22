@@ -64,7 +64,7 @@ def predict_linear_price(request: PredictionRequest):
     except Exception as e:
         print("🔥 Exception:", str(e))
         return {"error": "Internal server error. Please try again."}
-    @app.get("/coin_stats/{symbol}")
+@app.get("/coin_stats/{symbol}")
 def coin_stats(symbol: str):
     try:
         url = f"https://api.coingecko.com/api/v3/coins/{symbol.lower()}"
