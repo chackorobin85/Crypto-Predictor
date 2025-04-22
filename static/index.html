@@ -155,9 +155,21 @@
           `;
 
           // Fetch chart data
-          const chartRes = await fetch(`https://api.coingecko.com/api/v3/coins/${coinId}/market_chart?vs_currency=usd&days=7&interval=hourly`);
-          const chartData = await chartRes.json();
-          const prices = chartData.prices.map(entry => entry[1]).slice(-30);
+let chartData;
+try {
+  const chartRes = await fetch(`https://api.coingecko.com/api/v3/coins/${coinId}/market_chart?vs_currency=usd&days=7&interval=hourly`);
+  chartData = await chartRes.json();
+
+  if (!chartData.prices || chartData.prices.length === 0) {
+    throw new Error("No chart data found");
+  }
+} catch (err) {
+  console.error("Chart fetch error:", err);
+  resultBox.innerHTML += `<br><span style="color:red;">⚠️ Could not fetch price history for chart.</span>`;
+  return;
+}
+
+const prices = chartData.prices.map(entry => entry[1]).slice(-30);
           const labels = Array.from({ length: prices.length }, (_, i) => `T-${prices.length - i}`);
 
           prices.push(data.predicted_price_usd);
