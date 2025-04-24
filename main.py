@@ -4,11 +4,11 @@ from fastapi.responses import FileResponse
 from sklearn.linear_model import LinearRegression
 import numpy as np
 import httpx
-from datetime import datetime, timedelta
-
-CMC_API_KEY = "49b3f548-348d-4c31-8faf-249b0084718a"  # Please rotate this before sharing the repo
+from datetime import datetime
 
 app = FastAPI()
+
+CRYPTOCOMPARE_API_KEY = "2c8ffa2fb7e46dd438e4c06007ac9e6ee726b4584c40780c7f8998abdb1d2f98"
 
 class PredictionRequest(BaseModel):
     symbol: str
@@ -23,77 +23,119 @@ def predict_linear_price(request: PredictionRequest):
     try:
         symbol = request.symbol.upper()
         target_date = datetime.strptime(request.target_date, "%Y-%m-%d").date()
-        today = datetime.now().date()
+        today = datetime.today().date()
         days_ahead = (target_date - today).days
 
         if days_ahead < 1 or days_ahead > 30:
-            return {"error": "Target date must be within the next 30 days (CoinMarketCap free API limitation)."}
+            return {"error": "Only 1–30 day predictions are supported."}
 
-        # Use "historical" emulation by pulling 30-minute data and averaging
-        url = f"https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest"
-        headers = {"X-CMC_PRO_API_KEY": CMC_API_KEY}
-        params = {"symbol": symbol, "convert": "USD"}
+        # Fetch actual historical data
+        url = "https://min-api.cryptocompare.com/data/v2/histoday"
+        params = {
+            "fsym": symbol,
+            "tsym": "USD",
+            "limit": 30
+        }
+        headers = {
+            "authorization": f"Apikey {CRYPTOCOMPARE_API_KEY}"
+        }
 
-        prices = []
-        for i in range(7, 0, -1):  # simulate 7 days history
-            response = httpx.get(url, headers=headers, params=params)
-            data = response.json()
-            quote = data.get("data", {}).get(symbol, {}).get("quote", {}).get("USD", {})
-            price = quote.get("price")
-            if price:
-                prices.append(price)
+        response = httpx.get(url, params=params, headers=headers)
+        data = response.json()
 
-        if len(prices) < 5:
-            return {"error": "Insufficient historical data from CoinMarketCap (API returns current only)."}
+        history = data.get("Data", {}).get("Data", [])
+        closes = [d["close"] for d in history if d.get("close")]
 
-        X = np.arange(len(prices)).reshape(-1, 1)
-        y = np.array(prices)
+        if len(closes) < 10:
+            return {"error": "Insufficient historical data for prediction."}
+
+        X = np.arange(len(closes)).reshape(-1, 1)
+        y = np.array(closes)
         model = LinearRegression()
         model.fit(X, y)
 
-        future_index = len(prices) + days_ahead - 1
+        future_index = len(closes) + days_ahead - 1
         predicted_price = model.predict([[future_index]])[0]
 
         return {
             "symbol": symbol,
             "target_date": request.target_date,
             "predicted_price_usd": round(predicted_price, 2),
-            "note": "Simulated using repeated current price data (CoinMarketCap free API limitation)."
+            "note": f"Prediction based on {len(closes)} real days of historical data from CryptoCompare."
         }
 
     except Exception as e:
-        print("🔥 Exception in predict_linear:", str(e))
-        return {"error": "Internal server error. Please try again."}
+        print("🔥 Predict exception:", str(e))
+        return {"error": "Server error during prediction."}
 
 
 @app.get("/coin_stats/{symbol}")
 def coin_stats(symbol: str):
     try:
-        url = "https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest"
-        headers = {"X-CMC_PRO_API_KEY": CMC_API_KEY}
-        params = {"symbol": symbol.upper(), "convert": "USD"}
+        url = "https://min-api.cryptocompare.com/data/pricemultifull"
+        params = {
+            "fsyms": symbol.upper(),
+            "tsyms": "USD"
+        }
+        headers = {
+            "authorization": f"Apikey {CRYPTOCOMPARE_API_KEY}"
+        }
 
-        response = httpx.get(url, headers=headers, params=params)
+        response = httpx.get(url, params=params, headers=headers)
         data = response.json()
+        raw = data.get("RAW", {}).get(symbol.upper(), {}).get("USD", {})
 
-        if "data" not in data or symbol.upper() not in data["data"]:
-            return {"error": "Invalid symbol or data not found."}
-
-        info = data["data"][symbol.upper()]
-        quote = info.get("quote", {}).get("USD", {})
+        if not raw:
+            return {"error": "Invalid symbol or no data found."}
 
         return {
             "symbol": symbol.upper(),
-            "current_price_usd": quote.get("price"),
-            "high_24h": quote.get("high_24h"),
-            "low_24h": quote.get("low_24h"),
-            "price_change_percentage_1h": quote.get("percent_change_1h"),
-            "price_change_percentage_24h": quote.get("percent_change_24h"),
-            "price_change_percentage_7d": quote.get("percent_change_7d"),
-            "market_cap": quote.get("market_cap"),
-            "volume_24h": quote.get("volume_24h")
+            "current_price_usd": raw.get("PRICE"),
+            "high_24h": raw.get("HIGH24HOUR"),
+            "low_24h": raw.get("LOW24HOUR"),
+            "price_change_percentage_1h": raw.get("CHANGEHOUR"),
+            "price_change_percentage_24h": raw.get("CHANGEPCT24HOUR"),
+            "price_change_percentage_7d": raw.get("CHANGEPCTDAY"),
+            "market_cap": raw.get("MKTCAP"),
+            "volume_24h": raw.get("TOTALVOLUME24H")
         }
 
     except Exception as e:
-        print("🔥 CMC stats exception:", str(e))
-        return {"error": "Failed to fetch from CoinMarketCap"}
+        print("🔥 CryptoCompare stats exception:", str(e))
+        return {"error": "Failed to fetch stats from CryptoCompare."}
+
+
+@app.get("/historical_prices/{symbol}/{days}")
+def get_price_history(symbol: str, days: int):
+    try:
+        url = "https://min-api.cryptocompare.com/data/v2/histoday"
+        params = {
+            "fsym": symbol.upper(),
+            "tsym": "USD",
+            "limit": days
+        }
+        headers = {
+            "authorization": f"Apikey {CRYPTOCOMPARE_API_KEY}"
+        }
+
+        response = httpx.get(url, params=params, headers=headers)
+        data = response.json()
+        history = data.get("Data", {}).get("Data", [])
+
+        if not history:
+            return {"error": "Could not load price history."}
+
+        formatted = [
+            [d["time"] * 1000, d["close"]]
+            for d in history if d.get("close") is not None
+        ]
+
+        return {
+            "symbol": symbol.upper(),
+            "days": days,
+            "prices": formatted
+        }
+
+    except Exception as e:
+        print("🔥 History exception:", str(e))
+        return {"error": "Failed to load historical prices."}
