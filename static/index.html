@@ -1,120 +1,25 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Crypto Dashboard</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <style>
-    body {
-      font-family: 'Inter', sans-serif;
-      background-color: #0e1117;
-      color: #ffffff;
-      margin: 0;
-      padding: 20px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
+<script>
+  let chart;
+  let fullCoinList = [
+    "BTC", "ETH", "SOL", "ADA", "XRP", "DOGE", "AVAX", "MATIC", "DOT", "LTC",
+    "BCH", "LINK", "XLM", "TRX", "ATOM", "ETC", "NEAR", "FIL", "HBAR", "ICP"
+  ];
 
-    .container {
-      max-width: 700px;
-      width: 100%;
-      background-color: #1e222b;
-      padding: 30px;
-      border-radius: 12px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.4);
-    }
+  function loadTopCoins() {
+    const dropdown = document.getElementById("symbolDropdown");
+    dropdown.innerHTML = fullCoinList.map(symbol => `<option value="${symbol}">${symbol}</option>`).join('');
+  }
 
-    input, button, select {
-      width: 100%;
-      margin-top: 12px;
-      padding: 14px;
-      font-size: 16px;
-      border: none;
-      border-radius: 6px;
-    }
-
-    input, select {
-      background-color: #2b2f3a;
-      color: #fff;
-    }
-
-    button {
-      background-color: #4caf50;
-      color: white;
-      font-weight: 600;
-      cursor: pointer;
-    }
-
-    button:hover {
-      background-color: #45a049;
-    }
-
-    canvas {
-      margin-top: 25px;
-      background-color: #ffffff;
-      border-radius: 8px;
-    }
-
-    #stats {
-      margin-top: 20px;
-      background-color: #2b2f3a;
-      padding: 15px;
-      border-radius: 8px;
-      font-size: 14px;
-    }
-
-    #result {
-      margin-top: 10px;
-    }
-
-    #loader {
-      display: none;
-      text-align: center;
-      margin-top: 10px;
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <h2 style="text-align: center;">📊 Crypto Price Dashboard</h2>
-
-    <select id="symbolDropdown" onchange="syncSymbolInput()"></select>
-    <input type="text" id="symbol" placeholder="Type or pick symbol (e.g. BTC)" />
-    <input type="date" id="targetDate" />
-    <button onclick="predict()">🔮 Predict</button>
-
-    <div id="loader">🔄 Predicting...</div>
-    <div id="result"></div>
-    <div id="stats"></div>
-    <canvas id="priceChart" height="100"></canvas>
-  </div>
-
-  <script>
-    let chart;
-    let fullCoinList = [];
-
-    async function loadTopCoins() {
-      const res = await fetch("https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=50&page=1");
-      const topCoins = await res.json();
-
-      const dropdown = document.getElementById("symbolDropdown");
-      dropdown.innerHTML = topCoins.map(c => `<option value="${c.symbol.toUpperCase()}">${c.name} (${c.symbol.toUpperCase()})</option>`).join('');
-      fullCoinList = topCoins;
-    }
-
-    function syncSymbolInput() {
-      const dropdown = document.getElementById("symbolDropdown");
-      document.getElementById("symbol").value = dropdown.value;
-    }
+  function syncSymbolInput() {
+    const dropdown = document.getElementById("symbolDropdown");
+    document.getElementById("symbol").value = dropdown.value;
+  }
 
   async function predict() {
     const loader = document.getElementById("loader");
     const resultBox = document.getElementById("result");
     const statsBox = document.getElementById("stats");
-    const symbolInput = document.getElementById("symbol").value.trim().toLowerCase();
+    const symbolInput = document.getElementById("symbol").value.trim().toUpperCase();
     const targetDate = document.getElementById("targetDate").value;
 
     loader.style.display = "block";
@@ -127,18 +32,14 @@
       return;
     }
 
-    let coinIdMatch = fullCoinList.find(c => c.symbol.toLowerCase() === symbolInput);
-    let coinId = coinIdMatch ? coinIdMatch.id : symbolInput;
-
     try {
-      const res = await fetch("https://crypto-predictor-02.onrender.com/predict_linear", {
+      const res = await fetch("/predict_linear", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ symbol: coinId, target_date: targetDate })
+        body: JSON.stringify({ symbol: symbolInput, target_date: targetDate })
       });
 
       const data = await res.json();
-      console.log("🔍 Predict response:", data);
       loader.style.display = "none";
 
       if (!data.predicted_price_usd) {
@@ -153,10 +54,8 @@
         <em>${data.note}</em>
       `;
 
-      // 🔍 Coin Stats
-      const statsRes = await fetch(`https://crypto-predictor-02.onrender.com/coin_stats/${coinId}`);
+      const statsRes = await fetch(`/coin_stats/${symbolInput}`);
       const stats = await statsRes.json();
-      console.log("📊 Stats response:", stats);
 
       if (stats.error) {
         statsBox.innerHTML = `<span style="color:red;">⚠️ Failed to load stats: ${stats.error}</span>`;
@@ -164,19 +63,18 @@
       }
 
       statsBox.innerHTML = `
-  <strong>📈 Stats for ${stats.symbol || 'N/A'}</strong><br/>
-  Current Price: $${stats.current_price_usd?.toFixed(2) ?? 'N/A'}<br/>
-  24H High: $${stats.high_24h?.toFixed(2) ?? 'N/A'}<br/>
-  24H Low: $${stats.low_24h?.toFixed(2) ?? 'N/A'}<br/>
-  1H Change: ${stats.price_change_percentage_1h?.toFixed(2) ?? 'N/A'}%<br/>
-  24H Change: ${stats.price_change_percentage_24h?.toFixed(2) ?? 'N/A'}%<br/>
-  7D Change: ${stats.price_change_percentage_7d?.toFixed(2) ?? 'N/A'}%<br/>
-  Volume 24H: $${stats.volume_24h?.toLocaleString() ?? 'N/A'}<br/>
-  Market Cap: $${stats.market_cap?.toLocaleString() ?? 'N/A'}<br/>
-`;
+        <strong>📈 Stats for ${stats.symbol || 'N/A'}</strong><br/>
+        Current Price: $${stats.current_price_usd?.toFixed(2) ?? 'N/A'}<br/>
+        24H High: $${stats.high_24h?.toFixed(2) ?? 'N/A'}<br/>
+        24H Low: $${stats.low_24h?.toFixed(2) ?? 'N/A'}<br/>
+        1H Change: ${stats.price_change_percentage_1h?.toFixed(2) ?? 'N/A'}%<br/>
+        24H Change: ${stats.price_change_percentage_24h?.toFixed(2) ?? 'N/A'}%<br/>
+        7D Change: ${stats.price_change_percentage_7d?.toFixed(2) ?? 'N/A'}%<br/>
+        Volume 24H: $${stats.volume_24h?.toLocaleString() ?? 'N/A'}<br/>
+        Market Cap: $${stats.market_cap?.toLocaleString() ?? 'N/A'}<br/>
+      `;
 
-      // 🔍 Chart
-      const historyRes = await fetch(`https://crypto-predictor-02.onrender.com/historical_prices/${coinId}/30`);
+      const historyRes = await fetch(`/historical_prices/${symbolInput}/30`);
       const historyData = await historyRes.json();
 
       const prices = historyData?.prices?.map(p => p[1]) ?? [];
@@ -200,9 +98,7 @@
         },
         options: {
           responsive: true,
-          plugins: {
-            legend: { display: true }
-          },
+          plugins: { legend: { display: true }},
           scales: {
             x: { ticks: { color: "#bbb" }},
             y: { ticks: { color: "#bbb" }}
@@ -217,9 +113,5 @@
     }
   }
 
-    window.onload = async () => {
-      await loadTopCoins();
-    };
-  </script>
-</body>
-</html>
+  window.onload = loadTopCoins;
+</script>
